@@ -1,16 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Function to validate URL
+const isValidUrl = (url: string | undefined): boolean => {
+  if (!url) return false;
+  try {
+    return url.startsWith('http://') || url.startsWith('https://');
+  } catch {
+    return false;
+  }
+};
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials missing. Database features will be disabled until configured in Settings > Secrets.');
-}
+const rawUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Use real credentials if valid, otherwise use placeholders that won't crash the app
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder'
+  isValidUrl(rawUrl) ? rawUrl! : 'https://placeholder-project.supabase.co',
+  rawKey || 'placeholder-key'
 );
+
+if (!isValidUrl(rawUrl)) {
+  console.warn('Supabase URL is missing or invalid. Please check VITE_SUPABASE_URL in Vercel settings.');
+}
 
 // --- AUTHENTICATION HELPERS ---
 
