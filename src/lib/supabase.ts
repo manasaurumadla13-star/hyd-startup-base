@@ -10,10 +10,17 @@ const isValidUrl = (url: string | undefined): boolean => {
   }
 };
 
-const rawUrl = import.meta.env.VITE_SUPABASE_URL;
-const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Sanitization function to remove invisible characters or spaces
+const sanitize = (val: string | undefined): string => {
+  if (!val) return '';
+  // Removes non-printable characters and leading/trailing whitespace
+  return val.replace(/[^\x20-\x7E]/g, '').trim();
+};
 
-// DEBUG LOGGING (Check your browser console in Vercel)
+const rawUrl = sanitize(import.meta.env.VITE_SUPABASE_URL);
+const rawKey = sanitize(import.meta.env.VITE_SUPABASE_ANON_KEY);
+
+// DEBUG LOGGING
 console.log('Supabase Init Check:', {
   hasUrl: !!rawUrl,
   urlStart: rawUrl?.substring(0, 8),
