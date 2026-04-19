@@ -20,12 +20,10 @@ const sanitize = (val: string | undefined): string => {
 const rawUrl = sanitize(import.meta.env.VITE_SUPABASE_URL);
 const rawKey = sanitize(import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-// DEBUG LOGGING
-console.log('Supabase Init Check:', {
-  hasUrl: !!rawUrl,
-  urlStart: rawUrl?.substring(0, 8),
-  isUrlValid: isValidUrl(rawUrl)
-});
+// EMERGENCY ALERT (Only shows if things are broken)
+if ((!rawUrl || rawUrl.includes('placeholder')) && typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+  alert("CRITICAL ERROR: Your Vercel build is missing Supabase keys. Please re-run the build in Vercel after adding VITE_SUPABASE_URL to settings.");
+}
 
 // Use real credentials if valid, otherwise use placeholders that won't crash the app
 export const supabase = createClient(
