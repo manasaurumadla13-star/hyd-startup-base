@@ -197,6 +197,14 @@ export default function App() {
         user={user}
         onSignOut={handleSignOut}
       />
+      
+      {/* DB Connection Status Banner */}
+      {(!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) && (
+        <div className="bg-red-500 text-white text-[0.7rem] font-bold py-1 px-4 text-center sticky top-16 z-50">
+          ⚠️ DATABASE DISCONNECTED: Missing environment variables in Vercel. Please add VITE_SUPABASE_URL to your settings.
+        </div>
+      )}
+      
       <NewsTicker />
       
       <main className="flex-1">
