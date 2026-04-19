@@ -1,13 +1,73 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { ArrowRight, Globe } from "lucide-react";
+import { ArrowRight, Globe, Loader2 } from "lucide-react";
+import { STARTUPS, JOBS, EVENTS } from "../constants";
+import { supabase } from "../lib/supabase";
 
 export default function Home({ onPageChange, onListStartup }: { onPageChange: (p: string) => void, onListStartup: () => void }) {
+  const [counts, setCounts] = useState({
+    startups: STARTUPS.length,
+    jobs: JOBS.length,
+    events: EVENTS.length,
+    capital: 2100 // Default Cr
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchCounts() {
+      try {
+        const [
+          { count: sCount },
+          { count: jCount },
+          { count: eCount },
+          { data: startupData }
+        ] = await Promise.all([
+          supabase.from('startups').select('*', { count: 'exact', head: true }),
+          supabase.from('jobs').select('*', { count: 'exact', head: true }),
+          supabase.from('events').select('*', { count: 'exact', head: true }),
+          supabase.from('startups').select('funding')
+        ]);
+
+        // Helper to parse funding like "$307M" or "₹500Cr"
+        const parseFunding = (f: string | null) => {
+          if (!f) return 0;
+          const num = parseFloat(f.replace(/[^0-9.]/g, ''));
+          if (isNaN(num)) return 0;
+          if (f.toLowerCase().includes('cr')) return num; // Already in Cr
+          if (f.toLowerCase().includes('m')) return num * 0.083; // $M to ₹Cr (roughly 1 $M = 8.3 Cr)
+          return num;
+        };
+
+        const dbStartupsTotal = sCount || 0;
+        const dbJobsTotal = jCount || 0;
+        const dbEventsTotal = eCount || 0;
+
+        // Sum capital from constants and DB
+        let totalCapital = STARTUPS.reduce((acc, s) => acc + parseFunding(s.funding), 0);
+        if (startupData) {
+          totalCapital += startupData.reduce((acc, s) => acc + parseFunding(s.funding), 0);
+        }
+
+        setCounts({
+          startups: STARTUPS.length + dbStartupsTotal,
+          jobs: JOBS.length + dbJobsTotal,
+          events: EVENTS.length + dbEventsTotal,
+          capital: Math.round(totalCapital)
+        });
+      } catch (err) {
+        console.error("Stats Fetch Error:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCounts();
+  }, []);
+
   const stats = [
-    { label: "Active Startups", value: "500+" },
-    { label: "Capital Deployed", value: "₹2,100Cr+" },
-    { label: "Open Jobs", value: "48+" },
-    { label: "Events / Year", value: "120+" }
+    { label: "Active Startups", value: counts.startups.toString() },
+    { label: "Capital Deployed", value: `₹${counts.capital.toLocaleString()}Cr+` },
+    { label: "Open Jobs", value: counts.jobs.toString() },
+    { label: "Events / Year", value: counts.events.toString() }
   ];
 
   const highlights = [
@@ -20,19 +80,18 @@ export default function Home({ onPageChange, onListStartup }: { onPageChange: (p
   ];
 
   const ecostats = [
-    { num: "500+", lbl: "Active Startups across 12 sectors" },
-    { num: "₹2,100Cr", lbl: "Total venture capital deployed" },
+    { num: counts.startups.toString(), lbl: "Active Startups across 12 sectors" },
     { num: "2,000+", lbl: "T-Hub portfolio companies" },
     { num: "1", lbl: "Unicorn — Darwinbox valued at $1B+" },
     { num: "#4", lbl: "India startup ecosystem rank 2025" },
-    { num: "120+", lbl: "Startup events & summits per year" }
+    { num: counts.events.toString(), lbl: "Startup events & summits per year" }
   ];
 
   const features = [
-    { icon: "🏢", title: "Startup Directory", desc: "Browse 500+ Hyderabad startups. Fetch live data straight from their websites using AI.", link: "startups", arrow: "Explore Startups →", bg: "rgba(124,106,247,0.12)" },
+    { icon: "🏢", title: "Startup Directory", desc: "Browse Hyderabad startups. Fetch live data straight from their websites using AI.", link: "startups", arrow: "Explore Startups →", bg: "rgba(124,106,247,0.12)" },
     { icon: "💼", title: "Investor Network", desc: "Connect with top VCs, angel networks, and funds backing Hyderabad's next unicorns.", link: "investors", arrow: "Meet Investors →", bg: "rgba(29,213,160,0.1)" },
-    { icon: "📅", title: "Events Calendar", desc: "Stay on top of pitch nights, hackathons, and summits happening from April to June 2026.", link: "events", arrow: "View Events →", bg: "rgba(91,164,245,0.1)" },
-    { icon: "💡", title: "Jobs at Startups", desc: "48+ open roles at the city's fastest-growing startups. Apply in seconds with our register flow.", link: "jobs", arrow: "Browse Jobs →", bg: "rgba(29,213,160,0.1)" },
+    { icon: "📅", title: "Events Calendar", desc: `Stay on top of pitch nights, hackathons, and summits happening in Hyderabad.`, link: "events", arrow: "View Events →", bg: "rgba(91,164,245,0.1)" },
+    { icon: "💡", title: "Jobs at Startups", desc: `Discover open roles at the city's fastest-growing startups. Apply in seconds with our register flow.`, link: "jobs", arrow: "Browse Jobs →", bg: "rgba(29,213,160,0.1)" },
     { icon: "✉️", title: "Get in Touch", desc: "List your startup, promote an event, or explore partnerships. Our AI gets you a reply instantly.", link: "contact", arrow: "Contact Us →", bg: "rgba(232,121,176,0.1)" },
     { icon: "🚀", title: "Join the Portal", desc: "Create your free account to save startups, track investor activity, and get event alerts.", bg: "rgba(245,166,35,0.1)", arrow: "Sign Up Free →" },
     { icon: "🏢", title: "List Your Startup", desc: "Get featured on our directory. Reach thousands of local investors and talent instantly.", action: true, arrow: "List Now →", bg: "rgba(29,213,160,0.15)" }
@@ -60,7 +119,7 @@ export default function Home({ onPageChange, onListStartup }: { onPageChange: (p
               Where Bold Ideas Meet Real Capital
             </h1>
             <p className="text-lg md:text-xl text-text-secondary leading-relaxed mb-10 max-w-xl">
-              Discover 500+ startups, connect with visionary investors, explore 48+ open jobs, and be part of India's fastest-growing innovation hub — Cyberabad.
+              Discover Hyderabad's local startups, connect with visionary investors, explore open jobs, and be part of India's fastest-growing innovation hub — Cyberabad.
             </p>
             <div className="flex flex-wrap gap-4 mb-12">
               <button 
@@ -75,14 +134,6 @@ export default function Home({ onPageChange, onListStartup }: { onPageChange: (p
               >
                 Browse Jobs
               </button>
-            </div>
-            <div className="flex flex-wrap gap-x-12 gap-y-6">
-              {stats.map((s, i) => (
-                <div key={i}>
-                  <div className="font-display text-4xl font-extrabold tracking-tight text-text-primary">{s.value}</div>
-                  <div className="text-[0.8rem] text-text-muted mt-1 uppercase tracking-wider font-bold">{s.label}</div>
-                </div>
-              ))}
             </div>
           </motion.div>
 
@@ -172,19 +223,11 @@ export default function Home({ onPageChange, onListStartup }: { onPageChange: (p
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-4">
               <div className="aspect-square bg-surface border border-border-strong rounded-3xl p-8 flex flex-col justify-center text-center shadow-xl">
-                <div className="font-display text-5xl md:text-6xl font-extrabold text-accent mb-2 underline decoration-teal decoration-4">500+</div>
-                <div className="text-[0.7rem] text-text-muted font-bold uppercase tracking-widest leading-snug">Active Startups listed</div>
-              </div>
-              <div className="aspect-square bg-surface border border-border-strong rounded-3xl p-8 flex flex-col justify-center text-center shadow-xl">
-                <div className="font-display text-5xl md:text-6xl font-extrabold text-teal mb-2 underline decoration-accent decoration-4">₹2K Cr</div>
-                <div className="text-[0.7rem] text-text-muted font-bold uppercase tracking-widest leading-snug">VC Capital deployed</div>
+                <div className="font-display text-5xl md:text-6xl font-extrabold text-teal mb-2 underline decoration-accent decoration-4">2,000+</div>
+                <div className="text-[0.7rem] text-text-muted font-bold uppercase tracking-widest leading-snug">T-Hub Startups</div>
               </div>
             </div>
             <div className="space-y-4 pt-12">
-              <div className="aspect-square bg-surface border border-border-strong rounded-3xl p-8 flex flex-col justify-center text-center shadow-xl">
-                <div className="font-display text-5xl md:text-6xl font-extrabold text-amber mb-2 underline decoration-pink decoration-4">48+</div>
-                <div className="text-[0.7rem] text-text-muted font-bold uppercase tracking-widest leading-snug">Open jobs available</div>
-              </div>
               <div className="aspect-square bg-gradient-to-br from-accent to-accent2 rounded-3xl p-8 flex flex-col justify-center text-center text-white shadow-2xl shadow-accent/20">
                 <div className="font-display text-5xl md:text-6xl font-extrabold mb-2 tracking-tighter">#4</div>
                 <div className="text-[0.7rem] font-bold uppercase tracking-widest leading-snug opacity-90">Ranked ecosystem in India</div>
@@ -273,7 +316,7 @@ export default function Home({ onPageChange, onListStartup }: { onPageChange: (p
               onClick={() => onPageChange('startups')}
               className="px-10 py-5 bg-gradient-to-r from-accent to-[#6457d4] text-white rounded-xl font-extrabold text-[1.05rem] hover:translate-y-[-2px] transition-all shadow-2xl shadow-accent/40"
             >
-              Explore 500+ Startups
+              Explore {counts.startups} Startups
             </button>
             <button 
               onClick={() => onPageChange('jobs')}
