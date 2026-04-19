@@ -1,4 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { supabase, signIn, signUp, signOut } from './lib/supabase';
+import { User } from '@supabase/supabase-js';
 import Navbar from './components/Navbar';
 import NewsTicker from './components/NewsTicker';
 import Footer from './components/Footer';
@@ -22,12 +24,58 @@ export default function App() {
   const [startupDetails, setStartupDetails] = useState<StartupDetail | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   
+  // Auth & Session state
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authForm, setAuthForm] = useState({ email: '', password: '', fullName: '' });
+
   // Modal states
   const [authModal, setAuthModal] = useState<'login' | 'signup' | null>(null);
   const [listModalOpen, setListModalOpen] = useState(false);
   const [applyJob, setApplyJob] = useState<Job | null>(null);
   const [applySuccess, setApplySuccess] = useState<string | null>(null);
   const [applyingJob, setApplyingJob] = useState(false);
+
+  // Handle Auth Session
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+
+    try {
+      if (authModal === 'signup') {
+        const { error } = await signUp(authForm.email, authForm.password, authForm.fullName);
+        if (error) throw error;
+        alert("Check your email for the confirmation link!");
+      } else {
+        const { error } = await signIn(authForm.email, authForm.password);
+        if (error) throw error;
+      }
+      setAuthModal(null);
+      setAuthForm({ email: '', password: '', fullName: '' });
+    } catch (err: any) {
+      setAuthError(err.message || "An authentication error occurred");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   // Application form state
   const [applyForm, setApplyForm] = useState({ name: '', phone: '', currentRole: '' });
@@ -52,16 +100,75 @@ export default function App() {
     if (!applyJob || !applyForm.name || !applyForm.phone) return;
 
     setApplyingJob(true);
-    const confirmation = await getJobConfirmation(
-      applyForm.name,
-      applyForm.phone,
-      applyForm.currentRole,
-      applyJob.title,
-      applyJob.company
-    );
-    setApplySuccess(confirmation);
-    setApplyingJob(false);
-    setApplyForm({ name: '', phone: '', currentRole: '' });
+    
+    try {
+      // 1. Save to Database
+      const { error: dbError } = await supabase
+        .from('job_applications')
+        .insert([{
+          user_id: user?.id || null, // Allow guest applications or linked to user
+          job_id: applyJob.id,
+          job_title: applyJob.title,
+          company_name: applyJob.company,
+          applicant_name: applyForm.name,
+          phone_number: applyForm.phone,
+          experience_level: applyForm.currentRole
+        }]);
+
+      if (dbError) throw dbError;
+
+      // 2. Generate AI Confirmation
+      const confirmation = await getJobConfirmation(
+        applyForm.name,
+        applyForm.phone,
+        applyForm.currentRole,
+        applyJob.title,
+        applyJob.company
+      );
+      setApplySuccess(confirmation);
+      setApplyForm({ name: '', phone: '', currentRole: '' });
+    } catch (err) {
+      console.error("Application Error:", err);
+      alert("Failed to submit application. Please check your connection.");
+    } finally {
+      setApplyingJob(false);
+    }
+  };
+
+  const [listForm, setListForm] = useState({ name: '', category: '', desc: '', founder: '', website: '' });
+  const [listingStartup, setListingStartup] = useState(false);
+
+  const handleListStartupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      setAuthModal('login');
+      return;
+    }
+    
+    setListingStartup(true);
+    try {
+      const { error } = await supabase
+        .from('startups')
+        .insert([{
+          name: listForm.name,
+          category: listForm.category,
+          description: listForm.desc,
+          founder: listForm.founder,
+          website: listForm.website,
+          initials: listForm.name.substring(0,2).toUpperCase(),
+          color: '#7c6af7',
+          created_by: user.id
+        }]);
+
+      if (error) throw error;
+      setListForm({ name: '', category: '', desc: '', founder: '', website: '' });
+      setListModalOpen(false);
+      alert("Startup listed successfully! It will appear in the directory.");
+    } catch (err) {
+      console.error("Listing Error:", err);
+    } finally {
+      setListingStartup(false);
+    }
   };
 
   const renderPage = () => {
@@ -82,6 +189,8 @@ export default function App() {
         activePage={activePage} 
         onPageChange={handlePageChange} 
         onAuth={setAuthModal}
+        user={user}
+        onSignOut={handleSignOut}
       />
       <NewsTicker />
       
@@ -112,16 +221,52 @@ export default function App() {
       {/* Auth Modals */}
       <Modal 
         isOpen={authModal !== null} 
-        onClose={() => setAuthModal(null)} 
+        onClose={() => { setAuthModal(null); setAuthError(null); }} 
         title={authModal === 'login' ? "Welcome Back 👋" : "Join the Portal 🚀"}
       >
-        <InputField type="email" placeholder="Your Email Address" />
-        <InputField type="password" placeholder="Password" />
-        <PrimaryButton onClick={() => setAuthModal(null)}>
-          {authModal === 'login' ? "Login to Profile" : "Create My Account"}
-        </PrimaryButton>
-        <p className="mt-4 text-center text-xs text-text-muted">
-          By continuing, you agree to our Terms of Service.
+        <form onSubmit={handleAuthSubmit}>
+          {authError && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs text-center">
+              {authError}
+            </div>
+          )}
+          
+          {authModal === 'signup' && (
+            <InputField 
+              type="text" 
+              placeholder="Full Name" 
+              required
+              value={authForm.fullName}
+              onChange={e => setAuthForm({ ...authForm, fullName: e.target.value })}
+            />
+          )}
+          
+          <InputField 
+            type="email" 
+            placeholder="Your Email Address" 
+            required
+            value={authForm.email}
+            onChange={e => setAuthForm({ ...authForm, email: e.target.value })}
+          />
+          <InputField 
+            type="password" 
+            placeholder="Password" 
+            required
+            value={authForm.password}
+            onChange={e => setAuthForm({ ...authForm, password: e.target.value })}
+          />
+          
+          <PrimaryButton type="submit" loading={authLoading}>
+            {authModal === 'login' ? "Login to Profile" : "Create My Account"}
+          </PrimaryButton>
+        </form>
+        
+        <p className="mt-6 text-center text-[0.8rem] text-text-muted">
+          {authModal === 'login' ? (
+            <>Don't have an account? <button onClick={() => setAuthModal('signup')} className="text-accent font-bold">Sign up</button></>
+          ) : (
+            <>Already have an account? <button onClick={() => setAuthModal('login')} className="text-accent font-bold">Log in</button></>
+          )}
         </p>
       </Modal>
 
@@ -131,22 +276,46 @@ export default function App() {
         onClose={() => setListModalOpen(false)}
         title="List Your Startup 🏢"
       >
-        <InputField placeholder="Startup Name *" />
-        <SelectField defaultValue="">
-          <option value="" disabled>Select Category *</option>
-          <option value="SaaS">SaaS</option>
-          <option value="FinTech">FinTech</option>
-          <option value="Health">Health</option>
-          <option value="SpaceTech">SpaceTech</option>
-          <option value="AgriTech">AgriTech</option>
-          <option value="AI">AI</option>
-        </SelectField>
-        <TextAreaField placeholder="Short description of what you are building..." />
-        <InputField placeholder="Founder Name" />
-        <InputField placeholder="Website URL" />
-        <PrimaryButton onClick={() => setListModalOpen(false)}>
-          Submit For Review →
-        </PrimaryButton>
+        <form onSubmit={handleListStartupSubmit}>
+          <InputField 
+            placeholder="Startup Name *" 
+            required
+            value={listForm.name}
+            onChange={e => setListForm({ ...listForm, name: e.target.value })}
+          />
+          <SelectField 
+            defaultValue="" 
+            required
+            value={listForm.category}
+            onChange={e => setListForm({ ...listForm, category: e.target.value })}
+          >
+            <option value="" disabled>Select Category *</option>
+            <option value="SaaS">SaaS</option>
+            <option value="FinTech">FinTech</option>
+            <option value="Health">Health</option>
+            <option value="SpaceTech">SpaceTech</option>
+            <option value="AgriTech">AgriTech</option>
+            <option value="AI">AI</option>
+          </SelectField>
+          <TextAreaField 
+            placeholder="Short description of what you are building..." 
+            value={listForm.desc}
+            onChange={e => setListForm({ ...listForm, desc: e.target.value })}
+          />
+          <InputField 
+            placeholder="Founder Name" 
+            value={listForm.founder}
+            onChange={e => setListForm({ ...listForm, founder: e.target.value })}
+          />
+          <InputField 
+            placeholder="Website URL" 
+            value={listForm.website}
+            onChange={e => setListForm({ ...listForm, website: e.target.value })}
+          />
+          <PrimaryButton type="submit" loading={listingStartup}>
+            {user ? "Submit For Review →" : "Login to List Startup"}
+          </PrimaryButton>
+        </form>
       </Modal>
 
       {/* Job Apply Modal */}

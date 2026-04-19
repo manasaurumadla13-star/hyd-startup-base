@@ -1,10 +1,15 @@
+import { User } from "@supabase/supabase-js";
+import { LogOut, User as UserIcon } from "lucide-react";
+
 interface NavbarProps {
   activePage: string;
   onPageChange: (page: string) => void;
   onAuth: (type: 'login' | 'signup') => void;
+  user: User | null;
+  onSignOut: () => void;
 }
 
-export default function Navbar({ activePage, onPageChange, onAuth }: NavbarProps) {
+export default function Navbar({ activePage, onPageChange, onAuth, user, onSignOut }: NavbarProps) {
   const links = [
     { id: 'home', label: 'Home' },
     { id: 'startups', label: 'Startups' },
@@ -46,18 +51,38 @@ export default function Navbar({ activePage, onPageChange, onAuth }: NavbarProps
       </div>
 
       <div className="flex items-center gap-2 md:gap-3">
-        <button 
-          onClick={() => onAuth('login')}
-          className="px-4 py-1.5 rounded-lg border border-border-strong text-text-secondary text-[0.82rem] font-medium hover:bg-surface hover:text-text-primary transition-all"
-        >
-          Login
-        </button>
-        <button 
-          onClick={() => onAuth('signup')}
-          className="px-4 py-1.5 rounded-lg bg-accent text-white text-[0.82rem] font-bold hover:bg-accent2 transition-all shadow-lg shadow-accent/20"
-        >
-          Sign Up
-        </button>
+        {user ? (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border-strong">
+              <UserIcon size={14} className="text-accent" />
+              <span className="text-[0.82rem] font-medium text-text-primary hidden sm:inline">
+                {user.user_metadata?.full_name || 'Member'}
+              </span>
+            </div>
+            <button 
+              onClick={onSignOut}
+              className="p-2 rounded-lg border border-border-strong text-text-secondary hover:text-red-500 hover:border-red-500/30 transition-all"
+              title="Sign Out"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <button 
+              onClick={() => onAuth('login')}
+              className="px-4 py-1.5 rounded-lg border border-border-strong text-text-secondary text-[0.82rem] font-medium hover:bg-surface hover:text-text-primary transition-all"
+            >
+              Login
+            </button>
+            <button 
+              onClick={() => onAuth('signup')}
+              className="px-4 py-1.5 rounded-lg bg-accent text-white text-[0.82rem] font-bold hover:bg-accent2 transition-all shadow-lg shadow-accent/20"
+            >
+              Sign Up
+            </button>
+          </>
+        )}
       </div>
     </nav>
   );
