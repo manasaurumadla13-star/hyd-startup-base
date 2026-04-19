@@ -1,24 +1,70 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { STARTUPS } from "../constants";
 import { Startup } from "../types";
 import StartupCard from "../components/StartupCard";
-import { Search } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 export default function Startups({ onViewDetails }: { onViewDetails: (s: Startup) => void }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
+  const [dbStartups, setDbStartups] = useState<Startup[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStartups() {
+      try {
+        const { data, error } = await supabase
+          .from('startups')
+          .select('*')
+          .order('name');
+        
+        if (data && data.length > 0) {
+          // Flatten/map Supabase fields to our local interface if needed
+          const mapped = data.map(item => ({
+            name: item.name,
+            founder: item.founder || "Hyderabad Founder",
+            category: item.category || "Startup",
+            stage: item.stage || "Early",
+            funding: item.funding || "Undisclosed",
+            website: item.website || "#",
+            desc: item.description || "A startup based in the heart of Hyderabad.",
+            initials: item.initials || item.name.substring(0, 2).toUpperCase(),
+            color: item.color || "#7c6af7"
+          })) as Startup[];
+          setDbStartups(mapped);
+        }
+      } catch (err) {
+        console.error("DB Fetch Error:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStartups();
+  }, []);
+
+  const allStartups = useMemo(() => {
+    // Merge local constants with DB data
+    const combined = [...STARTUPS];
+    dbStartups.forEach(dbS => {
+      if (!combined.find(s => s.name.toLowerCase() === dbS.name.toLowerCase())) {
+        combined.push(dbS);
+      }
+    });
+    return combined;
+  }, [dbStartups]);
 
   const categories = ["All", "SaaS", "FinTech", "Health", "SpaceTech", "AgriTech", "CleanTech", "AI"];
 
   const filtered = useMemo(() => {
-    return STARTUPS.filter(s => {
+    return allStartups.filter(s => {
       const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || 
                           s.desc.toLowerCase().includes(search.toLowerCase()) ||
                           s.founder.toLowerCase().includes(search.toLowerCase());
       const matchFilter = filter === "All" || s.category === filter;
       return matchSearch && matchFilter;
     });
-  }, [search, filter]);
+  }, [search, filter, allStartups]);
 
   return (
     <div className="max-w-7xl mx-auto px-8 py-20 min-h-screen">
@@ -26,7 +72,7 @@ export default function Startups({ onViewDetails }: { onViewDetails: (s: Startup
         <span className="text-accent font-bold uppercase tracking-widest text-xs mb-3 block">🏢 Active Directory</span>
         <h1 className="font-display text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Featured Startups</h1>
         <p className="text-lg text-text-secondary max-w-2xl">
-          Discover companies reshaping industries from the City of Pearls. Click any card to fetch live data using Gemini AI.
+          Discover companies reshaping industries from the City of Pearls. {loading ? 'Fetching latest entries from database...' : 'Click any card to fetch live data using Gemini AI.'}
         </p>
       </div>
 
@@ -58,8 +104,9 @@ export default function Startups({ onViewDetails }: { onViewDetails: (s: Startup
         </div>
       </div>
 
-      <div className="mb-6 text-[0.85rem] text-text-muted">
-        Showing <strong>{filtered.length}</strong> of {STARTUPS.length} startups
+      <div className="mb-6 text-[0.85rem] text-text-muted flex items-center gap-2">
+        Showing <strong>{filtered.length}</strong> of {allStartups.length} startups
+        {loading && <Loader2 size={14} className="animate-spin text-accent" />}
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">

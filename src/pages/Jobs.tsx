@@ -1,24 +1,58 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { JOBS } from "../constants";
 import { Job } from "../types";
 import JobCard from "../components/JobCard";
-import { Search, BriefcaseBusiness, Users, Banknote, MapPin } from "lucide-react";
+import { Search, Loader2, BriefcaseBusiness, Users, Banknote, MapPin } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 export default function Jobs({ onApply }: { onApply: (j: Job) => void }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
+  const [dbJobs, setDbJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchJobs() {
+      try {
+        const { data } = await supabase.from('jobs').select('*');
+        if (data && data.length > 0) {
+          const mapped = data.map(j => ({
+            id: j.id,
+            title: j.title,
+            company: j.company,
+            category: j.category || "Engineering",
+            location: j.location || "Hyderabad",
+            type: j.job_type || "Full-time",
+            salary: j.salary || "Competitive",
+            exp: j.experience || "2+ years",
+            desc: j.description || "Exciting role at a fast-growing startup.",
+            initials: j.initials || j.company.substring(0, 2).toUpperCase(),
+            color: j.color || "#1dd5a0"
+          })) as Job[];
+          setDbJobs(mapped);
+        }
+      } catch (err) {
+        console.error("Jobs fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchJobs();
+  }, []);
+
+  const allJobs = useMemo(() => [...JOBS, ...dbJobs], [dbJobs]);
 
   const categories = ["All", "Engineering", "Product", "Design", "Sales", "Operations", "Data"];
 
   const filtered = useMemo(() => {
-    return JOBS.filter(j => {
+    return allJobs.filter(j => {
       const matchSearch = j.title.toLowerCase().includes(search.toLowerCase()) || 
                           j.company.toLowerCase().includes(search.toLowerCase()) ||
                           j.desc.toLowerCase().includes(search.toLowerCase());
       const matchFilter = filter === "All" || j.category === filter;
       return matchSearch && matchFilter;
     });
-  }, [search, filter]);
+  }, [search, filter, allJobs]);
 
   return (
     <div className="max-w-7xl mx-auto px-8 py-24 min-h-screen">
@@ -26,13 +60,13 @@ export default function Jobs({ onApply }: { onApply: (j: Job) => void }) {
         <span className="text-accent font-bold uppercase tracking-widest text-xs mb-3 block">💡 The Talent Hub</span>
         <h1 className="font-display text-4xl lg:text-5xl font-extrabold tracking-tighter">Jobs at Hyderabad Startups</h1>
         <p className="text-lg text-text-secondary mt-4 max-w-xl">
-          Build the future of India from the heart of Telangana. 48+ open roles at the city's fastest-growing venture-backed startups.
+          Build the future of India from the heart of Telangana. {allJobs.length}+ open roles at the city's fastest-growing venture-backed startups.
         </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
         <div className="bg-surface border border-border-default rounded-2xl p-6 text-center">
-          <div className="text-2xl font-display font-bold text-teal mb-1">48+</div>
+          <div className="text-2xl font-display font-bold text-teal mb-1">{allJobs.length}+</div>
           <div className="text-[0.7rem] text-text-muted font-bold uppercase tracking-widest">Open Positions</div>
         </div>
         <div className="bg-surface border border-border-default rounded-2xl p-6 text-center">

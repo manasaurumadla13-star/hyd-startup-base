@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
 import { getContactAutoReply } from "../lib/gemini";
 import { motion, AnimatePresence } from "motion/react";
+import { supabase } from "../lib/supabase";
 
 export default function Contact() {
   const [formData, setFormData] = useState({ name: "", email: "", message: "" });
@@ -13,10 +14,30 @@ export default function Contact() {
     if (!formData.name || !formData.email || !formData.message) return;
     
     setStatus('submitting');
-    const reply = await getContactAutoReply(formData.name, formData.email, formData.message);
-    setAiReply(reply);
-    setStatus('success');
-    setFormData({ name: "", email: "", message: "" });
+    
+    try {
+      // 1. Save message to Supabase
+      const { error: dbError } = await supabase
+        .from('contact_messages')
+        .insert([
+          { 
+            name: formData.name, 
+            email: formData.email, 
+            message: formData.message 
+          }
+        ]);
+
+      if (dbError) throw dbError;
+
+      // 2. Get AI Reply
+      const reply = await getContactAutoReply(formData.name, formData.email, formData.message);
+      setAiReply(reply);
+      setStatus('success');
+      setFormData({ name: "", email: "", message: "" });
+    } catch (err) {
+      console.error("Contact Submission Error:", err);
+      setStatus('error');
+    }
   };
 
   return (

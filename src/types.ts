@@ -28,11 +28,11 @@ export interface EcosystemEvent {
   venue: string;
   type: string;
   typeColor: string;
-  desc: string;
+  desc?: string;
 }
 
 export interface Job {
-  id: number;
+  id: number | string;
   title: string;
   company: string;
   initials: string;

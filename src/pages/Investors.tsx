@@ -1,21 +1,61 @@
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { INVESTORS } from "../constants";
 import InvestorCard from "../components/InvestorCard";
+import { supabase } from "../lib/supabase";
+import { Loader2 } from "lucide-react";
 
 export default function Investors() {
+  const [dbInvestors, setDbInvestors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchInvestors() {
+      try {
+        const { data } = await supabase.from('investors').select('*');
+        if (data) setDbInvestors(data);
+      } catch (err) {
+        console.error("Investors fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchInvestors();
+  }, []);
+
+  const allInvestors = useMemo(() => {
+    const combined = [...INVESTORS];
+    dbInvestors.forEach(dbI => {
+      // Check if already in constants by name
+      if (!combined.find(c => c.name === dbI.name)) {
+        combined.push({
+          name: dbI.name,
+          type: dbI.type || "VC Fund",
+          focus: dbI.focus || "Multi-stage",
+          portfolio: dbI.portfolio || "Various startups",
+          initials: dbI.initials || dbI.name.substring(0, 2).toUpperCase(),
+          color: dbI.color || "#1dd5a0"
+        });
+      }
+    });
+    return combined;
+  }, [dbInvestors]);
+
   return (
     <div className="bg-bg2">
       <div className="max-w-7xl mx-auto px-8 py-24 min-h-screen">
         <div className="mb-16 text-center">
           <span className="text-accent font-bold uppercase tracking-widest text-xs mb-3 block">💼 Venture Capital & Angels</span>
-          <h1 className="font-display text-4xl lg:text-5xl font-extrabold tracking-tighter">The Investor Network</h1>
+          <h1 className="font-display text-4xl lg:text-5xl font-extrabold tracking-tighter flex items-center justify-center gap-3">
+            The Investor Network
+            {loading && <Loader2 className="animate-spin text-accent" size={24} />}
+          </h1>
           <p className="text-lg text-text-secondary mt-6 max-w-xl mx-auto">
             Connect with leading VC funds, growth firms, and angel networks fueling Hyderabad's next generation of category leaders.
           </p>
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {INVESTORS.map((inv, i) => (
+          {allInvestors.map((inv, i) => (
             <InvestorCard key={i} investor={inv} />
           ))}
         </div>
