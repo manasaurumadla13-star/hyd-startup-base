@@ -59,10 +59,15 @@ export default function App() {
       if (authModal === 'signup') {
         const { error } = await signUp(authForm.email, authForm.password, authForm.fullName);
         if (error) throw error;
-        alert("Check your email for the confirmation link!");
+        alert("Verification Email Sent! Please check your inbox (and spam folder) to confirm your account.");
       } else {
         const { error } = await signIn(authForm.email, authForm.password);
-        if (error) throw error;
+        if (error) {
+          if (error.message.includes('Email not confirmed')) {
+            throw new Error("Email not confirmed. Please check your inbox for the verification link.");
+          }
+          throw error;
+        }
       }
       setAuthModal(null);
       setAuthForm({ email: '', password: '', fullName: '' });
