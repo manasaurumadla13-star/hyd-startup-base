@@ -13,9 +13,16 @@ const isValidUrl = (url: string | undefined): boolean => {
 const rawUrl = import.meta.env.VITE_SUPABASE_URL;
 const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// DEBUG LOGGING (Check your browser console in Vercel)
+console.log('Supabase Init Check:', {
+  hasUrl: !!rawUrl,
+  urlStart: rawUrl?.substring(0, 8),
+  isUrlValid: isValidUrl(rawUrl)
+});
+
 // Use real credentials if valid, otherwise use placeholders that won't crash the app
 export const supabase = createClient(
-  isValidUrl(rawUrl) ? rawUrl! : 'https://placeholder-project.supabase.co',
+  isValidUrl(rawUrl) ? rawUrl! : 'https://placeholder-hq.supabase.co',
   rawKey || 'placeholder-key'
 );
 
